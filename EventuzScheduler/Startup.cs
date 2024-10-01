@@ -1,9 +1,12 @@
-﻿using EventuzScheduler.Application.Dapper;
+﻿using CrystalQuartz.AspNetCore;
+using EventuzScheduler.Application.Dapper;
 using EventuzScheduler.Application.Enums;
 using EventuzScheduler.Application.Interfaces;
 using EventuzScheduler.Infrastructure.Database;
 using EventuzScheduler.Modules;
+using EventuzScheduler.Services.Scheduler.Hangfire;
 using EventuzScheduler.Services.Scheduler.Quartz;
+using Hangfire;
 using Microsoft.Data.SqlClient;
 using Quartz;
 using Quartz.AspNetCore;
@@ -29,44 +32,42 @@ namespace EventuzScheduler
 
             services.AddSwaggerModule();
 
-
-
-            // Регистрация IDbConnection
             services.AddScoped<IDbConnection>(sp => new SqlConnection(Configuration.GetConnectionString("DefaultConnection")));
 
-            // Регистрация репозитория
-            //services.AddScoped<ISchedulerTaskInfoRepository, SchedulerTaskInfoRepository>();
+            var schedulerType = Configuration["Scheduler:Type"];
 
-            //var config = SchedulerBuilder.Create();
-            //config.UsePersistentStore(store =>
-            //{
-            //    // it's generally recommended to stick with
-            //    // string property keys and values when serializing
-            //    store.UseProperties = true;
-
-            //    store.UseSystemTextJsonSerializer();
-            //});
-
-
-            services.AddQuartz(q =>
+            if (schedulerType == "Hangfire")
             {
-                q.UseMicrosoftDependencyInjectionJobFactory();
+                services.AddSingleton<ICustomScheduler, HangfireScheduler>();
 
-                q.UsePersistentStore(s =>
+                services.AddHangfire(config =>
                 {
-                    s.UseProperties = true;
-                    s.UseSqlServer(sqlServer =>
-                    {
-                        sqlServer.ConnectionString = Configuration.GetConnectionString("DefaultConnection");
-                        sqlServer.TablePrefix = "QRTZ_";
-                    });
-                    s.UseJsonSerializer();
+                    config.UseSqlServerStorage(Configuration.GetConnectionString("HangfireConnection"));
+                    GlobalJobFilters.Filters.Add(new CanBePausedAttribute());
                 });
-            });
-            services.AddQuartzServer(q => q.WaitForJobsToComplete = true);
+                services.AddHangfireServer();
+            }
+            else if (schedulerType == "Quartz")
+            {
+                services.AddQuartz(q =>
+                {
+                    q.UseMicrosoftDependencyInjectionJobFactory();
 
-            // Register your scheduler
-            services.AddSingleton<ICustomScheduler, QuartzScheduler>();
+                    q.UsePersistentStore(s =>
+                    {
+                        s.UseProperties = true;
+                        s.UseSqlServer(sqlServer =>
+                        {
+                            sqlServer.ConnectionString = Configuration.GetConnectionString("DefaultConnection");
+                            sqlServer.TablePrefix = "QRTZ_";
+                        });
+                        s.UseJsonSerializer();
+                    });
+                });
+                services.AddQuartzServer(q => q.WaitForJobsToComplete = true);
+
+                services.AddSingleton<ICustomScheduler, QuartzScheduler>();
+            }
 
 
 
@@ -94,37 +95,30 @@ namespace EventuzScheduler
 
             app.UseAuthorization();
 
+            var schedulerType = Configuration["Scheduler:Type"];
+
+            if (schedulerType == "Hangfire")
+            {
+                app.UseHangfireDashboard();
+                app.UseHangfireServer();
+            }
+            else if (schedulerType == "Quartz")
+            {
+                var schedulerFactory = app.ApplicationServices.GetRequiredService<ISchedulerFactory>();
+                var scheduler = schedulerFactory.GetScheduler().Result;
+
+                if (scheduler != null && !scheduler.IsStarted)
+                {
+                    scheduler.Start().GetAwaiter().GetResult();
+                }
+
+                app.UseCrystalQuartz(() => scheduler);
+            }
+
+
+
+
             app.UseEndpoints(endpoints => { endpoints.MapControllers(); });
         }
     }
 }
-
-
-
-//using Microsoft.AspNetCore.Hosting;
-
-//var builder = WebApplication.CreateBuilder(args);
-
-//// Add services to the container.
-
-//builder.Services.AddControllers();
-//// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-//builder.Services.AddEndpointsApiExplorer();
-//builder.Services.AddSwaggerGen();
-
-//var app = builder.Build();
-
-//// Configure the HTTP request pipeline.
-//if (app.Environment.IsDevelopment())
-//{
-//    app.UseSwagger();
-//    app.UseSwaggerUI();
-//}
-
-//app.UseHttpsRedirection();
-
-//app.UseAuthorization();
-
-//app.MapControllers();
-
-//app.Run();

@@ -1,4 +1,5 @@
 ﻿using EventuzScheduler.Application.Enums;
+using EventuzScheduler.Application.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,9 +8,9 @@ using System.Threading.Tasks;
 
 namespace EventuzScheduler.Application.DTOs
 {
-    public class SchedulerJob
+    public class CreateSchedulerTaskRequest
     {
-        public Action Action { get; set; }
+        public IScheduledTask Task { get; set; }
         public SchedulerTaskType Type { get; set; }
         public string Cron { get; set; }
     }

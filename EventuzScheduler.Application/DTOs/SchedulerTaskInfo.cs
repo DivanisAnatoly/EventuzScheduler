@@ -10,10 +10,9 @@ namespace EventuzScheduler.Application.DTOs
 {
     public class SchedulerTaskInfo
     {
-        public string Guid { get; set; }
+        public string Key { get; set; }
         public SchedulerTaskType Type { get; set; }
         public SchedulerTaskStatus Status { get; set; }
-        //public string StatusStr { get; set; }
         public string CRON { get; set; }
         public DateTime LastRun { get; set; }
     }

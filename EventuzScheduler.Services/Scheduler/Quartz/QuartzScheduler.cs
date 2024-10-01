@@ -15,12 +15,17 @@ namespace EventuzScheduler.Services.Scheduler.Quartz
         {
             _schedulerFactory = schedulerFactory;
             _scheduler = _schedulerFactory.GetScheduler().Result;
-            _scheduler.Start().Wait();
+            if (_scheduler != null && !_scheduler.IsStarted)
+            {
+                _scheduler.Start().Wait();
+            }
         }
 
-        public async Task<List<SchedulerTaskInfo>> GetTasksAsync()
+        public async Task<List<SchedulerTaskInfo>> GetTasksAsync(int page = 1, int pageSize = 10)
         {
-            var jobKeys = await _scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup());
+            var jobKeys = (await _scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup())).Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList(); ;
             var tasks = new List<SchedulerTaskInfo>();
 
             foreach (var jobKey in jobKeys)
@@ -51,10 +56,9 @@ namespace EventuzScheduler.Services.Scheduler.Quartz
                 {
                     tasks.Add(new SchedulerTaskInfo
                     {
-                        Guid = jobKey.Name,
+                        Key = jobKey.Name,
                         Type = (SchedulerTaskType)Enum.Parse(typeof(SchedulerTaskType), jobDetail.JobDataMap.GetString("Type")),
                         Status = taskStatus,
-                        //StatusStr = trigerState.ToString(),
                         CRON = (trigger as ICronTrigger)?.CronExpressionString,
                         LastRun = trigger.GetPreviousFireTimeUtc()?.DateTime ?? DateTime.MinValue
                     });
@@ -64,76 +68,57 @@ namespace EventuzScheduler.Services.Scheduler.Quartz
             return tasks;
         }
 
-        public async Task<bool> EditTaskCronAsync(string taskGuid, string newCron)
+        public async Task<SchedulerTaskInfo> CreateTaskAsync(CreateSchedulerTaskRequest schedulerJob)
         {
-            var triggerKey = new TriggerKey(taskGuid);
-            var newTrigger = TriggerBuilder.Create()
-                .WithIdentity(taskGuid)
-                .WithCronSchedule(newCron)
-                .Build();
-
-            await _scheduler.RescheduleJob(triggerKey, newTrigger);
-            return true;
-        }
-
-        public async Task<SchedulerTaskInfo> CreateTaskAsync(SchedulerJob schedulerJob)
-        {
-            var taskGuid = Guid.NewGuid().ToString();
             var type = schedulerJob.Type;
             var cron = schedulerJob.Cron;
-            var action = schedulerJob.Action;
+            var task = schedulerJob.Task;
 
-            JobDataMap jobDataMap = new JobDataMap();
-            jobDataMap.Put("action", action);
+            var taskKey = $"{type.GetStringName()}";
 
-            IJobDetail job = JobBuilder.Create<QuartzJob>()
-                .WithIdentity(taskGuid)
+            IJobDetail job = JobBuilder.Create<QuartzJobWrapper>()
+                .WithIdentity(taskKey)
                 .UsingJobData("Type", type.ToString())
-                .UsingJobData(jobDataMap)
+                .UsingJobData("taskType", task.GetType().AssemblyQualifiedName)
                 .Build();
 
             ITrigger trigger = TriggerBuilder.Create()
-                .WithIdentity(taskGuid)
+                .WithIdentity(Guid.NewGuid().ToString())
                 .WithCronSchedule(cron, x => x.WithMisfireHandlingInstructionDoNothing())
                 .Build();
 
             await _scheduler.ScheduleJob(job, trigger);
 
-            var task = new SchedulerTaskInfo
+            var taskInfo = new SchedulerTaskInfo
             {
-                Guid = taskGuid,
+                Key = taskKey,
                 Type = type,
                 Status = SchedulerTaskStatus.Running,
                 CRON = cron,
                 LastRun = DateTime.MinValue
             };
 
-            return task;
+            return taskInfo;
         }
 
-        public async Task<bool> ResumeTaskAsync(string taskGuid)
+        public async Task<bool> ResumeTaskAsync(string taskKey)
         {
-            var jobKey = new JobKey(taskGuid);
+            var jobKey = new JobKey(taskKey);
             await _scheduler.ResumeJob(jobKey);
             return true;
         }
 
-        public async Task<bool> PauseTaskAsync(string taskGuid)
+        public async Task<bool> PauseTaskAsync(string taskKey)
         {
-            var jobKey = new JobKey(taskGuid);
+            var jobKey = new JobKey(taskKey);
             await _scheduler.PauseJob(jobKey);
             return true;
         }
 
-        public async Task<bool> DeleteTaskAsync(string taskGuid)
+        public async Task<bool> DeleteTaskAsync(string taskKey)
         {
-            await _scheduler.DeleteJob(new JobKey(taskGuid));
+            await _scheduler.DeleteJob(new JobKey(taskKey));
             return true;
         }
-
-        //private async Task InitJobs()
-        //{
-
-        //}
     }
 }

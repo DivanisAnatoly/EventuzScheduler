@@ -1,6 +1,7 @@
 ﻿using EventuzScheduler.Application.DTOs;
 using EventuzScheduler.Application.Enums;
 using EventuzScheduler.Application.Interfaces;
+using EventuzScheduler.Services.Scheduler.Tasks;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EventuzScheduler.Controllers
@@ -19,16 +20,9 @@ namespace EventuzScheduler.Controllers
         [HttpPost("Scheduler/CreateTask")]
         public async Task<IActionResult> CreateTaskAsync(SchedulerTaskType type, string cron)
         {
-            Action myAction = async () =>
+            CreateSchedulerTaskRequest job = new()
             {
-                var tasks = await _scheduler.GetTasksAsync();
-                Console.WriteLine("Hello from delegate!");
-                Console.WriteLine(tasks);
-            };
-
-            SchedulerJob job = new()
-            {
-                Action = myAction,
+                Task = new MyTask(),
                 Type = type,          
                 Cron = cron
             };
@@ -39,33 +33,33 @@ namespace EventuzScheduler.Controllers
 
 
         [HttpGet("Scheduler/GetTasks")]
-        public async Task<IActionResult> GetTasksAsync()
+        public async Task<IActionResult> GetTasksAsync(int page = 1, int pageSize = 10)
         {
-            var tasks = await _scheduler.GetTasksAsync();
+            var tasks = await _scheduler.GetTasksAsync(page, pageSize);
             return Ok(tasks);
         }
 
 
         [HttpPost("Scheduler/ResumeTask")]
-        public async Task<IActionResult> ResumeTaskAsync(string taskGuid)
+        public async Task<IActionResult> ResumeTaskAsync(string taskKey)
         {
-            var task = await _scheduler.ResumeTaskAsync(taskGuid);
+            var task = await _scheduler.ResumeTaskAsync(taskKey);
             return Ok(task);
         }
 
 
         [HttpPost("Scheduler/PauseTask")]
-        public async Task<IActionResult> PauseTaskAsync(string taskGuid)
+        public async Task<IActionResult> PauseTaskAsync(string taskKey)
         {
-            var task = await _scheduler.PauseTaskAsync(taskGuid);
+            var task = await _scheduler.PauseTaskAsync(taskKey);
             return Ok(task);
         }
 
 
         [HttpPost("Scheduler/DeleteTask")]
-        public async Task<IActionResult> DeleteTaskAsync(string taskGuid)
+        public async Task<IActionResult> DeleteTaskAsync(string taskKey)
         {
-            var task = await _scheduler.DeleteTaskAsync(taskGuid);
+            var task = await _scheduler.DeleteTaskAsync(taskKey);
             return Ok(task);
         }
     }

@@ -10,16 +10,14 @@ namespace EventuzScheduler.Application.Interfaces
 {
     public interface ICustomScheduler
     {
-        Task<List<SchedulerTaskInfo>> GetTasksAsync();
+        Task<List<SchedulerTaskInfo>> GetTasksAsync(int page = 1, int pageSize = 10);
 
-        Task<bool> EditTaskCronAsync(string taskGuid, string cron);
+        Task<SchedulerTaskInfo> CreateTaskAsync(CreateSchedulerTaskRequest job);
 
-        Task<SchedulerTaskInfo> CreateTaskAsync(SchedulerJob job);
+        Task<bool> ResumeTaskAsync(string taskKey);
 
-        Task<bool> ResumeTaskAsync(string taskGuid);
+        Task<bool> PauseTaskAsync(string taskKey);
 
-        Task<bool> PauseTaskAsync(string taskGuid);
-
-        Task<bool> DeleteTaskAsync(string taskGuid);
+        Task<bool> DeleteTaskAsync(string taskKey);
     }
 }
